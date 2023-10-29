@@ -3,11 +3,11 @@
 archive: ./results/models/MEND/gpt-j-6B
 alg_name: "MEND"
 device: 0
-model_name: ./hugging_cache/gpt-j-6B
+model_name: EleutherAI/gpt-j-6b
 
 model_class: GPTJForCausalLM
 tokenizer_class: AutoTokenizer
-tokenizer_name: ./hugging_cache/gpt-j-6B
+tokenizer_name: EleutherAI/gpt-j-6b
 inner_params:
 - transformer.h.25.mlp.fc_in.weight
 - transformer.h.25.mlp.fc_out.weight

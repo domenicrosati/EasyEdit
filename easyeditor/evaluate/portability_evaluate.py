@@ -99,7 +99,6 @@ def test_batch_prediction_acc(model, tok, hparams, prompts, target, device, loca
         # Temporary hack to deal with foreign characters.
         # correct_id = correct_id[:, -1].squeeze()
         ans = ans.squeeze().detach().cpu().numpy().tolist()
-
         if locality:
             return ans
 

@@ -66,12 +66,12 @@ class BaseEditor:
             elif 'gpt-3.5' in self.model_name.lower():
                 self.model, self.tok = None, None
             elif 'gpt' in self.model_name.lower():
-                self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
-                self.tok = GPT2Tokenizer.from_pretrained(self.model_name)
+                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, local_files_only=True, low_cpu_mem_usage=True)
+                self.tok = GPT2Tokenizer.from_pretrained(self.model_name, local_files_only=True, low_cpu_mem_usage=True)
                 self.tok.pad_token_id = self.tok.eos_token_id
             elif 'llama' in self.model_name.lower():
-                self.model = LlamaForCausalLM.from_pretrained(self.model_name)
-                self.tok = LlamaTokenizer.from_pretrained(self.model_name)
+                self.model = LlamaForCausalLM.from_pretrained(self.model_name, local_files_only=True, low_cpu_mem_usage=True)
+                self.tok = LlamaTokenizer.from_pretrained(self.model_name, local_files_only=True, low_cpu_mem_usage=True)
                 self.tok.pad_token_id = self.tok.eos_token_id
             elif 'baichuan' in self.model_name.lower():
                 self.model = AutoModelForCausalLM.from_pretrained(self.model_name,trust_remote_code=True)
@@ -498,8 +498,6 @@ class BaseEditor:
                 if isinstance(locality_inputs[locality_key]['prompt'], str):
                     locality_inputs[locality_key]['prompt'] = [locality_inputs[locality_key]['prompt'],]
                     locality_inputs[locality_key]['ground_truth'] = [locality_inputs[locality_key]['ground_truth'], ]
-                assert len(locality_inputs[locality_key]['prompt']) == len(locality_inputs[locality_key]['ground_truth']) \
-                == len(requests) or print('One Edit instance needs one locality input.....')
 
                 for i, request in enumerate(requests):
                     request['locality'].update(
@@ -516,8 +514,6 @@ class BaseEditor:
                 if isinstance(portability_inputs[portability_key]['prompt'], str):
                     portability_inputs[portability_key]['prompt'] = [portability_inputs[portability_key]['prompt'],]
                     portability_inputs[portability_key]['ground_truth'] = [portability_inputs[portability_key]['ground_truth'], ]
-                assert len(portability_inputs[portability_key]['prompt']) == len(portability_inputs[portability_key]['ground_truth']) \
-                == len(requests) or print('One Edit instance needs one portability input.....')
 
                 for i, request in enumerate(requests):
                     request['portability'].update(

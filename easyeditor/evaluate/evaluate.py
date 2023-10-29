@@ -60,11 +60,16 @@ def compute_icl_edit_quality(
     if pre_edit:
         edit_acc = icl_lm_eval(model, model_name, hparams, tok, icl_examples,
                                        target_new, prompt)
+        ground_truth_acc = icl_lm_eval(model, model_name, hparams, tok, icl_examples,
+                                       ground_truth, prompt)
     else:
         edit_acc = icl_lm_eval(model, model_name, hparams, tok, icl_examples,
                                               target_new, new_fact)
+        ground_truth_acc = icl_lm_eval(model, model_name, hparams, tok, icl_examples,
+                                           ground_truth, new_fact)
     ret = {
-        f"rewrite_acc": edit_acc
+        f"rewrite_acc": edit_acc,
+        f"ground_truth_acc": ground_truth_acc
     }
     ret['locality'] = {}
     ret['portability'] = {}
@@ -72,6 +77,9 @@ def compute_icl_edit_quality(
         rephrase_acc = icl_lm_eval(model, model_name, hparams, tok, icl_examples,
                                target_new, f'New Fact: {prompt} {target_new}\nPrompt: {rephrase}')
         ret['rephrase_acc'] = rephrase_acc
+        ground_truth_rephrase_acc = icl_lm_eval(model, model_name, hparams, tok, icl_examples,
+                               ground_truth, f'New Fact: {prompt} {ground_truth}\nPrompt: {rephrase}')
+        ret['ground_truth_rephrase_acc'] = ground_truth_rephrase_acc
 
     if 'locality' in record.keys() and any(record['locality']):
         for locality_key in record['locality'].keys():
@@ -165,19 +173,23 @@ def compute_rewrite_or_rephrase_quality(
     tok: AutoTokenizer,
     prompt: str,
     target_new: str,
+    ground_truth: str,
     device,
-    test_rephrase: bool = False
+    test_rephrase: bool = False,
+    test_ground_truth: bool = False
 ) -> typing.Dict:
-
+    target = target_new
+    if test_ground_truth:
+        target = ground_truth
     if 't5' in model_name.lower():
         stuff_probs = test_seq2seq_batch_prediction_acc(model, tok, hparams,
                                                         prompt,
-                                                        target_new,
+                                                        target,
                                                         device)
     elif 'gpt' in model_name.lower():
         if hparams.alg_name == 'SERAC' or hparams.alg_name == 'MEND':
-            target_new = (" " if target_new[0] != " " else "") + target_new
-        target_tok = tok(target_new, truncation=True, max_length=hparams.max_length)["input_ids"]
+            target = (" " if target[0] != " " else "") + target
+        target_tok = tok(target, truncation=True, max_length=hparams.max_length)["input_ids"]
         inp_prompts = [prompt]
         inp_prompts.extend([
             prompt + ' ' + tok.decode(target_tok[:i])
@@ -189,7 +201,7 @@ def compute_rewrite_or_rephrase_quality(
         # ]
         stuff_probs = test_batch_prediction_acc(model, tok, hparams, inp_prompts, target_tok, device)
     elif 'llama' in model_name.lower():
-        target_tok = tok(target_new, truncation=True, max_length=hparams.max_length)["input_ids"] #erase bos_token_id
+        target_tok = tok(target, truncation=True, max_length=hparams.max_length)["input_ids"] #erase bos_token_id
         if target_tok[0] == tok.unk_token_id or hparams.alg_name == 'SERAC' or hparams.alg_name == 'MEND':
             target_tok = target_tok[1:]
         inp_prompts = [prompt]
@@ -199,7 +211,7 @@ def compute_rewrite_or_rephrase_quality(
         ])
         stuff_probs = test_batch_prediction_acc(model, tok, hparams, inp_prompts, target_tok, device)
     elif 'baichuan' in model_name.lower():
-        target_tok = tok(target_new, truncation=True, max_length=hparams.max_length)["input_ids"] #erase bos_token_id
+        target_tok = tok(target, truncation=True, max_length=hparams.max_length)["input_ids"] #erase bos_token_id
         if target_tok[0] == tok.unk_token_id or hparams.alg_name == 'SERAC' or hparams.alg_name == 'MEND':
             target_tok = target_tok[1:]
         inp_prompts = [prompt]
@@ -209,7 +221,7 @@ def compute_rewrite_or_rephrase_quality(
         ])
         stuff_probs = test_batch_prediction_acc(model, tok, hparams, inp_prompts, target_tok, device)
     elif 'chatglm2' in model_name.lower():
-        target_tok = tok(target_new, truncation=True, max_length=hparams.max_length)["input_ids"] #erase bos_token_id
+        target_tok = tok(target, truncation=True, max_length=hparams.max_length)["input_ids"] #erase bos_token_id
         if target_tok[0] == tok.unk_token_id or hparams.alg_name == 'SERAC' or hparams.alg_name == 'MEND':
             target_tok = target_tok[1:]
         inp_prompts = [prompt]
@@ -222,11 +234,13 @@ def compute_rewrite_or_rephrase_quality(
     probs = stuff_probs
 
     # Structure the restuls as a dictionary.
+    key = 'rewrite'
+    if test_ground_truth:
+        key = 'ground_truth'
 
-    if not test_rephrase:
-        key = 'rewrite'
-    else:
-        key = 'rephrase'
+    if test_rephrase:
+        key += '_rephrase'
+    
     ret = {
         f"{key}_acc": probs
     }
@@ -341,14 +355,24 @@ def compute_edit_quality(
     # inverse_relation_ground_truth = record["inverse_relation_ground_truth"] if 'inverse_relation_ground_truth' in record.keys() else None
 
     ret = compute_rewrite_or_rephrase_quality(model, model_name, hparams, tok,
-                                              rewrite_prompts, target_new, device=device)
+                                              rewrite_prompts, target_new, ground_truth, device=device)
+    ret.update(
+        compute_rewrite_or_rephrase_quality(model, model_name, hparams, tok,
+                                            rewrite_prompts,  target_new, ground_truth, device=device, test_ground_truth=True)
+    )
+
 
     ret['locality'] = {}
     ret['portability'] = {}
+    # need to fix these
     if rephrase_prompts is not None:
         ret.update(
             compute_rewrite_or_rephrase_quality(model, model_name, hparams, tok,
-                                                rephrase_prompts, target_new, device=device, test_rephrase=True)
+                                                rephrase_prompts, target_new, ground_truth, device=device, test_rephrase=True)
+        )
+        ret.update(
+            compute_rewrite_or_rephrase_quality(model, model_name, hparams, tok,
+                                                rephrase_prompts, target_new, ground_truth, device=device, test_rephrase=True, test_ground_truth=True)
         )
 
     if 'locality' in record.keys() and any(record['locality']):
@@ -399,8 +423,9 @@ def test_batch_prediction_acc(model, tok, hparams, prompts, target, device, loca
         # ]
         # Temporary hack to deal with foreign characters.
         # correct_id = correct_id[:, -1].squeeze()
+        
         ans = ans.squeeze().detach().cpu().numpy().tolist()
-
+        print(tok.decode(ans), tok.decode(target), ans, target)
         if locality:
             return ans
 
